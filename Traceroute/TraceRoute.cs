@@ -9,7 +9,7 @@ using System.Net.NetworkInformation;
 
 namespace Traceroute
 {
-    
+
     class TracerouteEventArgs : EventArgs
     {
         /*
@@ -17,25 +17,25 @@ namespace Traceroute
      * 
      * 
      */
-        public string adress { get; private set; }
-        public string roundtriptime { get; private set; }
-        public string zwrot;
+        public string Adress { get; private set; }
+        public string Roundtriptime { get; private set; }
+        public string Zwrot;
         public int Ttl { get; private set; }
-        public TracerouteEventArgs(string Adres, string RTT, string Zwrot, int Ttl)
+        public TracerouteEventArgs(string adres, string rtt, string zwrot, int ttl)
         {
-            adress = Adres;
-            roundtriptime = RTT;
-            zwrot = Zwrot;
-            this.Ttl = Ttl;
+            Adress = adres;
+            Roundtriptime = rtt;
+            this.Zwrot = zwrot;
+            this.Ttl = ttl;
         }
         public string[] ReturnArrayString(int id)
         {
             string[] buffor = new string[5];
             buffor[0] = Convert.ToString(id);
-            buffor[1] = adress;
-            if (zwrot == "") buffor[2] = "*";
-            else buffor[2] = zwrot;
-            buffor[3] = roundtriptime;
+            buffor[1] = Adress;
+            if (Zwrot == "") buffor[2] = "*";
+            else buffor[2] = Zwrot;
+            buffor[3] = Roundtriptime;
             buffor[4] = Convert.ToString(Ttl);
             return buffor;
         }
@@ -47,52 +47,77 @@ namespace Traceroute
          * 
          * 
          */
-        string address;                 // Adres do pingowania
         public event EventHandler Loguj;       // Event logowania informacji
-        Ping ping;                      // Klasa pingujaca
-        PingOptions ping_options;       // Klasa opcji pingowania
-        byte[] buffor;                  // Dane do wysłania
-        int licznik = 0;                // Licznik pingow bez odpowiedzi
-        int curr_id = 0;                // Aktualny numer trasy
-        const int max_licznik = 20;
-        public List<string> Lista_adresow { get; private set; }
+        Ping _ping;                      // Klasa pingujaca
+        PingOptions _pingOptions;       // Klasa opcji pingowania
+        byte[] _buffor;                  // Dane do wysłania
+        int _licznik = 0;                // Licznik pingow bez odpowiedzi
+        int _currId = 0;                // Aktualny numer trasy
+        const int MaxLicznik = 20;
+        public List<string> ListaAdresow { get; private set; }
         public TraceRoute()
         {
             string wiadomosc = "BASEMSG";                   // Tworzenie buffora w razie braku przypisania
-            buffor = Encoding.ASCII.GetBytes(wiadomosc);    //
-            ping = new Ping();                              // Obiekt pingujacy
-            ping_options = new PingOptions();               // Obiekt argumentow obiektu pingujacego
+            _buffor = Encoding.ASCII.GetBytes(wiadomosc);    //
+            _ping = new Ping();                              // Obiekt pingujacy
+            _pingOptions = new PingOptions();               // Obiekt argumentow obiektu pingujacego
         }
         public void SetSend(string wiadomosc)
         {
-            buffor = Encoding.ASCII.GetBytes(wiadomosc);        // Tworzenie nowego buffora
+            _buffor = Encoding.ASCII.GetBytes(wiadomosc);        // Tworzenie nowego buffora
         }
         public void SetNew()                // Tworzy nowe obiekty ping,pingoptions w razie chęci ponownego śledzenia
         {
-            ping = new Ping();
-            ping_options = new PingOptions();
+            _ping = new Ping();
+            _pingOptions = new PingOptions();
         }
-        public bool Sledz(string Adress,int ms,int max_track,bool aliases)
+        public bool Sledz(string adress, int ms, int maxTrack, bool aliases)
         {
-            Lista_adresow = new List<string>();         // Lista z wszystkimi adresami;
-            licznik = 0;                                // Licznik braku odpowiedzi
-            curr_id = 1;                                // Licznik id
+            ListaAdresow = new List<string>();         // Lista z wszystkimi adresami;
+            _licznik = 0;                                // Licznik braku odpowiedzi
+            _currId = 1;                                // Licznik id
             try
             {
-                ping_options.Ttl = 1;                   // Ustawiamy początkowo Time to live na 1
-                while (max_track==0||(max_track>0&&curr_id<=max_track))    // Jesli nie ma limitu albo jest i nie zostal osiagniety
+                _pingOptions.Ttl = 1;                   // Ustawiamy początkowo Time to live na 1
+                while (maxTrack == 0 || (maxTrack > 0 && _currId <= maxTrack))    // Jesli nie ma limitu albo jest i nie zostal osiagniety
                 {
-                        PingReply reply = ping.Send(Adress, ms, buffor, ping_options);  // Wysylamy icmp
-                        string buff = "";                                               // Przygotowywujemy wyjscie
-                        if (reply.Status == IPStatus.Success)                           // Ping udany(tzn dotarł do swgo celu)
+                    var timeStart = DateTime.Now.Millisecond;
+                    PingReply reply = _ping.Send(adress, ms, _buffor, _pingOptions);  // Wysylamy icmp
+                    var timeEnd = DateTime.Now.Millisecond;
+                    string buff = "";                                               // Przygotowywujemy wyjscie
+                    if (reply != null && reply.Status == IPStatus.Success)                           // Ping udany(tzn dotarł do swgo celu)
+                    {
+
+                        try
                         {
-                            
+                            if (!aliases) // Jesli chcemy aliasy
+                            {
+                                var host = Dns.GetHostEntry(reply.Address);
+                                buff = "(" + host.HostName + ")";               // Dodawanie do buffora wyjscia
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            //W razie nieudanego pobrania aliasu nic się nie stanie i program poleci dalej
+                        }
+                        finally
+                        {
+                            ListaAdresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
+                                                                         //Loguje wpis
+                            Loguj?.Invoke(null, new TracerouteEventArgs(buff + reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), _pingOptions.Ttl));
+                        }
+                        return true;        //Zwraca true, koniec funkcji
+                    }
+                    else if (reply != null && (reply.Status == IPStatus.TtlExpired || reply.Status != IPStatus.TimedOut))    // Jesli zwrocono informacje o skonczeniu ttl lub nie dostano odpowiedzi w okreslonym czasie
+                    {
+                        _licznik = 0;    // Zerujemy licznik nieudanych pingow
+                        if (reply.Address != null)
+                        {
                             try
                             {
                                 if (!aliases) // Jesli chcemy aliasy
                                 {
-                                    IPHostEntry host;                               // Informacje o hoscie
-                                    host = Dns.GetHostEntry(reply.Address);         // Pobiernie informacji o hoscie na podstawie ip z pingu
+                                    var host = Dns.GetHostEntry(reply.Address);
                                     buff = "(" + host.HostName + ")";               // Dodawanie do buffora wyjscia
                                 }
                             }
@@ -102,81 +127,54 @@ namespace Traceroute
                             }
                             finally
                             {
-                                Lista_adresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
-                                //Loguje wpis
-                                Loguj(null, new TracerouteEventArgs(buff+ reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), ping_options.Ttl));
+                                _currId++;                                   // Kolejny numer w liscie
+                                ListaAdresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
+                                                                             //Loguje wpis
+                                Loguj?.Invoke(null, new TracerouteEventArgs(buff + reply.Address.ToString(), (timeEnd-timeStart).ToString(), Encoding.ASCII.GetString(reply.Buffer), _pingOptions.Ttl));
                             }
-                            return true;        //Zwraca true, koniec funkcji
                         }
-                        else if (reply.Status == IPStatus.TtlExpired||reply.Status != IPStatus.TimedOut)    // Jesli zwrocono informacje o skonczeniu ttl lub nie dostano odpowiedzi w okreslonym czasie
+                    }
+                    else
+                    {
+                        _currId++;                      // Naliczanie numeru drogi
+                        if (_licznik == MaxLicznik)     // Licznik braku odpowiedzi równy maksymalnej ilości braku odpowiedzi
                         {
-                            licznik = 0;    // Zerujemy licznik nieudanych pingow
-                            if (reply.Address != null)
-                            {
-                                try
-                                {
-                                        reply = ping.Send(reply.Address, ms, buffor); // Pingujemy zwrócony adres by dostać czas potrzebny na połączenie z nim
-                                        if (!aliases) // Jesli chcemy aliasy
-                                        {
-                                            IPHostEntry host;                               // Informacje o hoscie
-                                            host = Dns.GetHostEntry(reply.Address);         // Pobiernie informacji o hoscie na podstawie ip z pingu
-                                            buff = "(" + host.HostName + ")";               // Dodawanie do buffora wyjscia
-                                        }
-                                }
-                                catch (Exception ex)
-                                {
-                                    //W razie nieudanego pobrania aliasu nic się nie stanie i program poleci dalej
-                                }
-                                finally
-                                {
-                                    curr_id++;                                   // Kolejny numer w liscie
-                                    Lista_adresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
-                                    //Loguje wpis
-                                    Loguj(null, new TracerouteEventArgs(buff + reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), ping_options.Ttl));
-                                }
-                            }
+                            // Informujemy o błędzie
+                            Loguj?.Invoke(null, new TracerouteEventArgs("Prawdopodobnie napotkano firewalla", "*", "*", _pingOptions.Ttl));
+                            return false;
                         }
-                        else
-                        {
-                            curr_id++;                      // Naliczanie numeru drogi
-                            if (licznik == max_licznik)     // Licznik braku odpowiedzi równy maksymalnej ilości braku odpowiedzi
-                            {
-                                // Informujemy o błędzie
-                                Loguj(null, new TracerouteEventArgs("Prawdopodobnie napotkano firewalla", "*", "*", ping_options.Ttl));
-                                return false;
-                            }
-                            Lista_adresow.Add("*");
-                            licznik++;
-                            Loguj(null, new TracerouteEventArgs("*", "*", "*", ping_options.Ttl));
-                        }
-                        ping_options.Ttl += 1;              // Zwiększamy żywotność
+                        ListaAdresow.Add("*");
+                        _licznik++;
+                        Loguj?.Invoke(null, new TracerouteEventArgs("*", "*", "*", _pingOptions.Ttl));
+                    }
+                    _pingOptions.Ttl += 1;              // Zwiększamy żywotność
                 }
             }
             catch (Exception ex)
             {
                 // W razie błędu wyświetlamy treść błędu
                 System.Windows.Forms.MessageBox.Show(ex.ToString());
-     
+
                 return false;
             }
             return false;
         }
-        public bool Sledz_Lista(string Adress,int ms,int max_track,bool aliases,List<string> adresy)
+        public bool Sledz_Lista(string adress, int ms, int maxTrack, bool aliases, List<string> adresy)
         {
-            Lista_adresow = new List<string>();         // Lista z wszystkimi adresami;
-            licznik = 0;                                // Licznik braku odpowiedzi
-            curr_id = 1;                                // Licznik id
+            ListaAdresow = new List<string>();         // Lista z wszystkimi adresami;
+            _licznik = 0;                                // Licznik braku odpowiedzi
+            _currId = 1;                                // Licznik id
             int przeskok = 1;                           // Wartosć o która przeskakujemy ttl
             try
             {
-                ping_options.Ttl = 1;                   // Ustawiamy początkowo Time to live na 1
-                while (max_track == 0 || (max_track > 0 && ping_options.Ttl <= max_track))  // Jesli nie ma limitu albo jest i nie zostal osiagniety
+                _pingOptions.Ttl = 1;                   // Ustawiamy początkowo Time to live na 1
+                while (maxTrack == 0 || (maxTrack > 0 && _pingOptions.Ttl <= maxTrack))  // Jesli nie ma limitu albo jest i nie zostal osiagniety
                 {
-                    PingReply reply = ping.Send(Adress, ms, buffor, ping_options);      // Pingujemy
+                    PingReply reply = _ping.Send(adress, ms, _buffor, _pingOptions);      // Pingujemy
                     string buff = "";                           // Przygotowanie wyjścia
-                    if (reply.Status == IPStatus.Success)       // Udane, osiągnięto cel
+                    if (reply != null && reply.Status == IPStatus.Success)       // Udane, osiągnięto cel
                     {
-                        
+
                         try
                         {
                             #region Sprawdzanie
@@ -186,12 +184,12 @@ namespace Traceroute
                                 {
                                     if (adresy.Count == 1)                  // Zostal ostatni punkt
                                     {
-                                            przeskok = 1;                   // Skaczemy o 1
-                                            adresy.RemoveAt(0);             // Usuwamy punkt z listy
+                                        przeskok = 1;                   // Skaczemy o 1
+                                        adresy.RemoveAt(0);             // Usuwamy punkt z listy
                                     }
                                     else if (adresy.Count > 0)              // Jest więcej niż jeden punkt
                                     {
-                                        if (Lista_adresow.Contains(adresy[1]))  // Wystąpił już adres który będzie celem w przyszłości
+                                        if (ListaAdresow.Contains(adresy[1]))  // Wystąpił już adres który będzie celem w przyszłości
                                         {
                                             przeskok *= -1;                     // Idziemy z ttl w dół
                                             adresy.RemoveAt(0);                 // Usuwamy punkt
@@ -212,8 +210,7 @@ namespace Traceroute
                             #endregion
                             if (!aliases) // Jesli chcemy aliasy
                             {
-                                IPHostEntry host;                               // Informacje o hoscie
-                                host = Dns.GetHostEntry(reply.Address);         // Pobiernie informacji o hoscie na podstawie ip z pingu
+                                var host = Dns.GetHostEntry(reply.Address);
                                 buff = "(" + host.HostName + ")";               // Dodawanie do buffora wyjscia
                             }
                         }
@@ -223,16 +220,17 @@ namespace Traceroute
                         }
                         finally
                         {
-                            Lista_adresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
+                            ListaAdresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
                             //Loguje wpis
-                            Loguj(null, new TracerouteEventArgs(buff + reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), ping_options.Ttl));
+                            if (Loguj != null)
+                                Loguj(null, new TracerouteEventArgs(buff + reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), _pingOptions.Ttl));
                         }
-                        if(adresy.Count==0) return true;        // Jesli nie ma już żądanych punktów, zakończ funkcje
+                        if (adresy.Count == 0) return true;        // Jesli nie ma już żądanych punktów, zakończ funkcje
                     }
-                    else if (reply.Status == IPStatus.TtlExpired || reply.Status != IPStatus.TimedOut)  // Jesli zwrocono informacje o skonczeniu ttl lub nie dostano odpowiedzi w okreslonym czasie
+                    else if (reply != null && (reply.Status == IPStatus.TtlExpired || reply.Status != IPStatus.TimedOut))  // Jesli zwrocono informacje o skonczeniu ttl lub nie dostano odpowiedzi w okreslonym czasie
                     {
-                        curr_id++;      // Aktualny numer drogi
-                        licznik = 0;    // Zerujemy licznik nieudanych pingow
+                        _currId++;      // Aktualny numer drogi
+                        _licznik = 0;    // Zerujemy licznik nieudanych pingow
                         if (reply.Address != null)
                         {
                             try
@@ -249,7 +247,7 @@ namespace Traceroute
                                         }
                                         else if (adresy.Count > 0)              // Jest więcej niż jeden punkt
                                         {
-                                            if (Lista_adresow.Contains(adresy[1]))  // Wystąpił już adres który będzie celem w przyszłości
+                                            if (ListaAdresow.Contains(adresy[1]))  // Wystąpił już adres który będzie celem w przyszłości
                                             {
                                                 przeskok *= -1;                     // Idziemy z ttl w dół
                                                 adresy.RemoveAt(0);                 // Usuwamy punkt
@@ -268,11 +266,10 @@ namespace Traceroute
                                     }
                                 }
                                 #endregion
-                                reply = ping.Send(reply.Address, ms, buffor); // Pingujemy zwrócony adres by dostać czas potrzebny na połączenie z nim
+                                reply = _ping.Send(reply.Address, ms, _buffor); // Pingujemy zwrócony adres by dostać czas potrzebny na połączenie z nim
                                 if (!aliases) // Jesli chcemy aliasy
                                 {
-                                    IPHostEntry host;                               // Informacje o hoscie
-                                    host = Dns.GetHostEntry(reply.Address);         // Pobiernie informacji o hoscie na podstawie ip z pingu
+                                    var host = Dns.GetHostEntry(reply.Address);
                                     buff = "(" + host.HostName + ")";               // Dodawanie do buffora wyjscia
                                 }
                             }
@@ -282,34 +279,38 @@ namespace Traceroute
                             }
                             finally
                             {
-                                Lista_adresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
-                                //Loguje wpis
-                                Loguj(null, new TracerouteEventArgs(buff + reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), ping_options.Ttl));
+                                if (reply != null)
+                                {
+                                    ListaAdresow.Add(reply.Address.ToString()); // Dopisuje adres do listy
+                                    //Loguje wpis
+                                    if (Loguj != null)
+                                        Loguj(null, new TracerouteEventArgs(buff + reply.Address.ToString(), reply.RoundtripTime.ToString(), Encoding.ASCII.GetString(reply.Buffer), _pingOptions.Ttl));
+                                }
                             }
                         }
                     }
                     else
                     {
-                        curr_id++;                      // Naliczanie numeru drogi
-                        if (licznik == max_licznik)     // Licznik braku odpowiedzi równy maksymalnej ilości braku odpowiedzi
+                        _currId++;                      // Naliczanie numeru drogi
+                        if (_licznik == MaxLicznik)     // Licznik braku odpowiedzi równy maksymalnej ilości braku odpowiedzi
                         {
                             // Informujemy o błędzie
-                            Loguj(null, new TracerouteEventArgs("Prawdopodobnie napotkano firewalla", "*", "*", ping_options.Ttl));
+                            Loguj(null, new TracerouteEventArgs("Prawdopodobnie napotkano firewalla", "*", "*", _pingOptions.Ttl));
                             return false;
                         }
-                        Lista_adresow.Add("*");
-                        licznik++;
-                        Loguj(null, new TracerouteEventArgs("*", "*", "*", ping_options.Ttl));
+                        ListaAdresow.Add("*");
+                        _licznik++;
+                        Loguj(null, new TracerouteEventArgs("*", "*", "*", _pingOptions.Ttl));
                     }
-                    ping_options.Ttl += przeskok;       // Zmieniamyy żywotność
+                    _pingOptions.Ttl += przeskok;       // Zmieniamyy żywotność
                     if (przeskok == -1)                 // Jesli schodzimy w dół usuwaj adresy które są powyżej
                     {
-                        while (Lista_adresow.Contains(reply.Address.ToString()))
+                        while (ListaAdresow.Contains(reply.Address.ToString()))
                         {
-                            Lista_adresow.Remove(reply.Address.ToString());
+                            ListaAdresow.Remove(reply.Address.ToString());
                         }
                     }
-                    if(curr_id>=max_track&&max_track>0)              // Jeśli aktualna droga jest większa/równa maksymalnej, zakończ z powodzeniem
+                    if (_currId >= maxTrack && maxTrack > 0)              // Jeśli aktualna droga jest większa/równa maksymalnej, zakończ z powodzeniem
                     {
                         return true;
                     }

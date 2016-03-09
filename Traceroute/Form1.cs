@@ -42,9 +42,9 @@ namespace Traceroute
             else
             {
                 //TracerouteEventArgs Args = (TracerouteEventArgs)e;
-                if ((e as TracerouteEventArgs).zwrot == tx_msg.Text) (e as TracerouteEventArgs).zwrot = "true";
+                if ((e as TracerouteEventArgs).Zwrot == tx_msg.Text) (e as TracerouteEventArgs).Zwrot = "true";
                 list_logs.Items.Add(new ListViewItem((e as TracerouteEventArgs).ReturnArrayString(id)));
-                kopia.Add((e as TracerouteEventArgs).adress + " " + (e as TracerouteEventArgs).roundtriptime + "ms " + "Ttl:" + (e as TracerouteEventArgs).Ttl);
+                kopia.Add((e as TracerouteEventArgs).Adress + " " + (e as TracerouteEventArgs).Roundtriptime + "ms " + "Ttl:" + (e as TracerouteEventArgs).Ttl);
                 list_logs.Items[list_logs.Items.Count - 1].EnsureVisible();
                 id++;
             }
